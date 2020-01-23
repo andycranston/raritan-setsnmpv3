@@ -1,6 +1,6 @@
 #! /usr/bin/python3
 #
-# @(!--#) @(#) setsnmpv3.py, version 010, 22-january-2020
+# @(!--#) @(#) setsnmpv3.py, version 013, 23-january-2020
 #
 # set up SNMP v3 on a Raritan intelligent PDU
 #
@@ -33,7 +33,7 @@ def defaultparams():
 
     params['user']          = 'admin'
     params['userpass']      = 'raritan'
-    params['snmpv3user']    = 'admin'
+    params['snmpuser']      = 'admin'
     params['securitylevel'] = 'none'
     params['authprotocol']  = 'SHA1'
     params['authpassword']  = ''
@@ -44,10 +44,35 @@ def defaultparams():
 
 ########################################################################
 
+def alllower(s):
+    if s == '':
+        return False
+
+    for c in s:
+        if not c.islower():
+            return False
+
+    return True
+
+########################################################################
+
+def dequote(s, q1, q2):
+    if len(s) >= 2:
+        fc = s[0]
+        lc = s[-1]
+
+        if (((fc == q1) and (lc == q1)) or ((fc == q2) and (lc == q2))):
+            s = s[1:-1]
+
+    return s
+
+########################################################################
+
 def readconfigfile(configfile, configfilename):
     global progname
 
-    params = defaultparams()
+    ### params = defaultparams()
+    params = {}
 
     linenum = 0
 
@@ -88,8 +113,19 @@ def readconfigfile(configfile, configfilename):
 
         paramname = line[:equalpos].rstrip()
 
-        paramvalue = line[equalpos+1:].strip()
+        if not alllower(paramname):
+            print('{}: line {} in config file "{}" - parameter name "{}" is not all lowercase'.format(progname, linenum, configfilename, paramname), file=sys.stderr)
+            errorcount += 1
+            continue
 
+        paramvalue = line[equalpos+1:].strip()
+        paramvalue = dequote(paramvalue, '"', '\'')
+
+        if paramvalue == '':
+            print('{}: line {} in config file "{}" - parameter name "{}" has a null string value'.format(progname, linenum, configfilename, paramname), file=sys.stderr)
+            errorcount += 1
+            continue
+ 
         params[paramname] = paramvalue
 
         ### print('>>{}<<  >>{}<<'.format(paramname, paramvalue))
@@ -100,36 +136,78 @@ def readconfigfile(configfile, configfilename):
 
 ########################################################################
 
-def validparams(params):
+def validparams(params, configfilename):
     global progname
 
     errorcount = 0
 
-    param = [ 'user', 'userpass', 'snmpv3user' ]
-
-    for p in param:
-        if params[p] == '':
-            print('{}: parameter "{}" must not be the null (empty) string'.format(progname, p), file=sys.stderr)
+    for p in [ 'user', 'userpass', 'snmpuser', 'securitylevel' ]:
+        if p not in params:
+            print('{}: parameter "{}" is required but was not specified in config file "{}"'.format(progname, p, configfilename), file=sys.stderr)
             errorcount += 1
+
+    if errorcount > 0:
+        return errorcount
 
     sl = params['securitylevel']
 
-    if ( (sl != 'disable') and (sl != 'none') and (sl != 'auth') and (sl != 'auth+priv') ):
-        print('{}: parameter "{}" has an invalid value of "{}"'.format(progname, 'securitylevel;', sl), file=sys.stderr)
+    if not sl in [ 'disable', 'none', 'auth', 'auth+priv' ]:
+        print('{}: parameter "{}" has an invalid value of "{}"'.format(progname, 'securitylevel', sl), file=sys.stderr)
         errorcount += 1
+        return errorcount
+
+    if (sl == 'auth') or (sl == 'auth+priv'):
+        if 'authprotocol' not in params:
+            print('{}: parameter "authprotocol" required but not in config file "{}"'.format(progname, configfilename), file=sys.stderr)
+            errorcount += 1
+
+        if 'authpassword' not in params:
+            print('{}: parameter "authpassword" required but not in config file "{}"'.format(progname, configfilename), file=sys.stderr)
+            errorcount += 1
+
+        if errorcount > 0:
+            return errorcount
+
+        ap = params['authprotocol'].lower()
+
+        if not ap in [ 'sha-1', 'md5' ]:
+            print('{} valid of parameter "authprotocol" invalid'.format(progname), file=sys.stderr)
+            errorcount += 1
+
+    if sl == 'auth+priv':
+        if 'privprotocol' not in params:
+            print('{}: parameter "privprotocol" required but not in config file "{}"'.format(progname, configfilename), file=sys.stderr)
+            errorcount += 1
+
+        if 'privpassword' not in params:
+            print('{}: parameter "privpassword" required but not in config file "{}"'.format(progname, configfilename), file=sys.stderr)
+            errorcount += 1
+
+        if errorcount > 0:
+            return errorcount
+
+        pp = params['privprotocol'].lower()
+
+        if not pp in [ 'des', 'aes-128' ]:
+            print('{} valid of parameter "privprotocol" invalid'.format(progname), file=sys.stderr)
+            errorcount += 1
 
     return errorcount
 
 ########################################################################
 
 def setsnmpservice(host, params):
-    print('Configuring SNMPv3 service on host "{}"'.format(host))
+    global progname
 
     agent = raritan.rpc.Agent("https", host, params['user'], params['userpass'], timeout=30, disable_certificate_verification=True)
 
     snmpproxy = raritan.rpc.devsettings.Snmp('/snmp', agent)
 
-    snmpconf = snmpproxy.getConfiguration()
+    try:
+        snmpconf = snmpproxy.getConfiguration()
+    except raritan.rpc.HttpException:
+        print('{}: problem getting SNMP service details'.format(progname), file=sys.stderr)
+        return False
 
     updaterequired = False
 
@@ -144,49 +222,49 @@ def setsnmpservice(host, params):
     if updaterequired:
         snmpproxy.setConfiguration(snmpconf)
 
-    return
+    return True
     
 ########################################################################
 
 def setsnmpuser(host, params):
     functiondebug = False
 
-    print('Configuring SNMPv3 user "{}" on host "{}"'.format(params['snmpv3user'], host))
+    ### print('Configuring SNMPv3 user "{}" on host "{}"'.format(params['snmpuser'], host))
 
     agent = raritan.rpc.Agent("https", host, params['user'], params['userpass'], timeout=30, disable_certificate_verification=True)
 
-    snmpv3userproxy = raritan.rpc.usermgmt.User('/auth/user/{}'.format(params['snmpv3user']), agent)
+    snmpuserproxy = raritan.rpc.usermgmt.User('/auth/user/{}'.format(params['snmpuser']), agent)
 
-    snmpv3userinfo = snmpv3userproxy.getInfo()
+    snmpuserinfo = snmpuserproxy.getInfo()
 
     if functiondebug:
         print('Current SNMP v3 settings are:')
-        print(snmpv3userinfo.snmpV3Settings)
+        print(snmpuserinfo.snmpV3Settings)
 
     sl = params['securitylevel']
 
     if sl == 'disable':
-        snmpv3userinfo.snmpV3Settings.enabled                           = False
-        snmpv3userinfo.snmpV3Settings.secLevel                          = raritan.rpc.um.SnmpV3.SecurityLevel.NO_AUTH_NO_PRIV
-        snmpv3userinfo.snmpV3Settings.authProtocol                      = raritan.rpc.um.SnmpV3.AuthProtocol.SHA1
-        snmpv3userinfo.snmpV3Settings.usePasswordAsAuthPassphrase       = True
-        snmpv3userinfo.snmpV3Settings.haveAuthPassphrase                = False
-        snmpv3userinfo.snmpV3Settings.authPassphrase                    = ''
-        snmpv3userinfo.snmpV3Settings.privProtocol                      = raritan.rpc.um.SnmpV3.PrivProtocol.DES
-        snmpv3userinfo.snmpV3Settings.useAuthPassphraseAsPrivPassphrase = True
-        snmpv3userinfo.snmpV3Settings.havePrivPassphrase                = False
-        snmpv3userinfo.snmpV3Settings.privPassphrase                    = ''
+        snmpuserinfo.snmpV3Settings.enabled                           = False
+        snmpuserinfo.snmpV3Settings.secLevel                          = raritan.rpc.um.SnmpV3.SecurityLevel.NO_AUTH_NO_PRIV
+        snmpuserinfo.snmpV3Settings.authProtocol                      = raritan.rpc.um.SnmpV3.AuthProtocol.SHA1
+        snmpuserinfo.snmpV3Settings.usePasswordAsAuthPassphrase       = True
+        snmpuserinfo.snmpV3Settings.haveAuthPassphrase                = False
+        snmpuserinfo.snmpV3Settings.authPassphrase                    = ''
+        snmpuserinfo.snmpV3Settings.privProtocol                      = raritan.rpc.um.SnmpV3.PrivProtocol.DES
+        snmpuserinfo.snmpV3Settings.useAuthPassphraseAsPrivPassphrase = True
+        snmpuserinfo.snmpV3Settings.havePrivPassphrase                = False
+        snmpuserinfo.snmpV3Settings.privPassphrase                    = ''
     elif sl == 'none':
-        snmpv3userinfo.snmpV3Settings.enabled                           = True
-        snmpv3userinfo.snmpV3Settings.secLevel                          = raritan.rpc.um.SnmpV3.SecurityLevel.NO_AUTH_NO_PRIV
-        snmpv3userinfo.snmpV3Settings.authProtocol                      = raritan.rpc.um.SnmpV3.AuthProtocol.SHA1
-        snmpv3userinfo.snmpV3Settings.usePasswordAsAuthPassphrase       = True
-        snmpv3userinfo.snmpV3Settings.haveAuthPassphrase                = False
-        snmpv3userinfo.snmpV3Settings.authPassphrase                    = ''
-        snmpv3userinfo.snmpV3Settings.privProtocol                      = raritan.rpc.um.SnmpV3.PrivProtocol.DES
-        snmpv3userinfo.snmpV3Settings.useAuthPassphraseAsPrivPassphrase = True
-        snmpv3userinfo.snmpV3Settings.havePrivPassphrase                = False
-        snmpv3userinfo.snmpV3Settings.privPassphrase                    = ''
+        snmpuserinfo.snmpV3Settings.enabled                           = True
+        snmpuserinfo.snmpV3Settings.secLevel                          = raritan.rpc.um.SnmpV3.SecurityLevel.NO_AUTH_NO_PRIV
+        snmpuserinfo.snmpV3Settings.authProtocol                      = raritan.rpc.um.SnmpV3.AuthProtocol.SHA1
+        snmpuserinfo.snmpV3Settings.usePasswordAsAuthPassphrase       = True
+        snmpuserinfo.snmpV3Settings.haveAuthPassphrase                = False
+        snmpuserinfo.snmpV3Settings.authPassphrase                    = ''
+        snmpuserinfo.snmpV3Settings.privProtocol                      = raritan.rpc.um.SnmpV3.PrivProtocol.DES
+        snmpuserinfo.snmpV3Settings.useAuthPassphraseAsPrivPassphrase = True
+        snmpuserinfo.snmpV3Settings.havePrivPassphrase                = False
+        snmpuserinfo.snmpV3Settings.privPassphrase                    = ''
     elif sl == 'auth':
         ap = params['authprotocol']
 
@@ -195,16 +273,16 @@ def setsnmpuser(host, params):
         elif ap.lower() == 'md5':
             authproto = raritan.rpc.um.SnmpV3.AuthProtocol.MD5
 
-        snmpv3userinfo.snmpV3Settings.enabled                           = True
-        snmpv3userinfo.snmpV3Settings.secLevel                          = raritan.rpc.um.SnmpV3.SecurityLevel.AUTH_NO_PRIV
-        snmpv3userinfo.snmpV3Settings.authProtocol                      = authproto
-        snmpv3userinfo.snmpV3Settings.usePasswordAsAuthPassphrase       = False
-        snmpv3userinfo.snmpV3Settings.haveAuthPassphrase                = True
-        snmpv3userinfo.snmpV3Settings.authPassphrase                    = params['authpassword'] 
-        snmpv3userinfo.snmpV3Settings.privProtocol                      = raritan.rpc.um.SnmpV3.PrivProtocol.DES
-        snmpv3userinfo.snmpV3Settings.useAuthPassphraseAsPrivPassphrase = True
-        snmpv3userinfo.snmpV3Settings.havePrivPassphrase                = False
-        snmpv3userinfo.snmpV3Settings.privPassphrase                    = ''
+        snmpuserinfo.snmpV3Settings.enabled                           = True
+        snmpuserinfo.snmpV3Settings.secLevel                          = raritan.rpc.um.SnmpV3.SecurityLevel.AUTH_NO_PRIV
+        snmpuserinfo.snmpV3Settings.authProtocol                      = authproto
+        snmpuserinfo.snmpV3Settings.usePasswordAsAuthPassphrase       = False
+        snmpuserinfo.snmpV3Settings.haveAuthPassphrase                = True
+        snmpuserinfo.snmpV3Settings.authPassphrase                    = params['authpassword'] 
+        snmpuserinfo.snmpV3Settings.privProtocol                      = raritan.rpc.um.SnmpV3.PrivProtocol.DES
+        snmpuserinfo.snmpV3Settings.useAuthPassphraseAsPrivPassphrase = True
+        snmpuserinfo.snmpV3Settings.havePrivPassphrase                = False
+        snmpuserinfo.snmpV3Settings.privPassphrase                    = ''
     elif sl == 'auth+priv':
         ap = params['authprotocol']
 
@@ -220,23 +298,23 @@ def setsnmpuser(host, params):
         elif pp.lower() == 'aes-128':
             privproto = raritan.rpc.um.SnmpV3.PrivProtocol.AES128
        
-        snmpv3userinfo.snmpV3Settings.enabled                           = True
-        snmpv3userinfo.snmpV3Settings.secLevel                          = raritan.rpc.um.SnmpV3.SecurityLevel.AUTH_PRIV
-        snmpv3userinfo.snmpV3Settings.authProtocol                      = authproto
-        snmpv3userinfo.snmpV3Settings.usePasswordAsAuthPassphrase       = False
-        snmpv3userinfo.snmpV3Settings.haveAuthPassphrase                = True
-        snmpv3userinfo.snmpV3Settings.authPassphrase                    = params['authpassword'] 
-        snmpv3userinfo.snmpV3Settings.privProtocol                      = privproto
-        snmpv3userinfo.snmpV3Settings.useAuthPassphraseAsPrivPassphrase = False
-        snmpv3userinfo.snmpV3Settings.havePrivPassphrase                = True
-        snmpv3userinfo.snmpV3Settings.privPassphrase                    = params['privpassword']
+        snmpuserinfo.snmpV3Settings.enabled                           = True
+        snmpuserinfo.snmpV3Settings.secLevel                          = raritan.rpc.um.SnmpV3.SecurityLevel.AUTH_PRIV
+        snmpuserinfo.snmpV3Settings.authProtocol                      = authproto
+        snmpuserinfo.snmpV3Settings.usePasswordAsAuthPassphrase       = False
+        snmpuserinfo.snmpV3Settings.haveAuthPassphrase                = True
+        snmpuserinfo.snmpV3Settings.authPassphrase                    = params['authpassword'] 
+        snmpuserinfo.snmpV3Settings.privProtocol                      = privproto
+        snmpuserinfo.snmpV3Settings.useAuthPassphraseAsPrivPassphrase = False
+        snmpuserinfo.snmpV3Settings.havePrivPassphrase                = True
+        snmpuserinfo.snmpV3Settings.privPassphrase                    = params['privpassword']
 
     if functiondebug:
         print('Proposed new SNMP v3 settings are:')
-        print(snmpv3userinfo.snmpV3Settings)
+        print(snmpuserinfo.snmpV3Settings)
 
     print('Updating ... ', end='', flush=True)
-    rc = snmpv3userproxy.updateAccountFull('', snmpv3userinfo)
+    rc = snmpuserproxy.updateAccountFull('', snmpuserinfo)
     if rc == 0:
         print('done')
     else:
@@ -244,9 +322,9 @@ def setsnmpuser(host, params):
         print('An error occurred - updateAccountFull method return code = {}'.format(rc))
 
     if functiondebug:
-        snmpv3userinfo = snmpv3userproxy.getInfo()
+        snmpuserinfo = snmpuserproxy.getInfo()
         print('Settings now in place are:')
-        print(snmpv3userinfo.snmpV3Settings)
+        print(snmpuserinfo.snmpV3Settings)
 
     return
     
@@ -277,9 +355,11 @@ def readhostfile(hostfile, hostfilename, params):
 
         host = words[0]
 
-        setsnmpservice(host, params)
+        print('Configuring SNMP v3 on host "{}"'.format(host))
 
-        setsnmpuser(host, params)
+        if setsnmpservice(host, params) == True:
+            setsnmpuser(host, params)
+            print('Done')
 
     return errorcount
 
@@ -311,7 +391,7 @@ def main():
     if errorcount > 0:
         sys.exit(1)
 
-    errorcount = validparams(params)
+    errorcount = validparams(params, configfilename)
 
     if errorcount > 0:
         sys.exit(1)
