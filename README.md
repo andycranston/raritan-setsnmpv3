@@ -37,7 +37,7 @@ You will need:
 + Windows or UNIX/Linux
 + A recent install of Python 3
 + The latest JSON-RPC SDK from Raritan installed
-+ The Python bindings fro mthe SDK listed in PYTHONPATH
++ The Python bindings from the SDK listed in PYTHONPATH
 
 That should be all.
 
