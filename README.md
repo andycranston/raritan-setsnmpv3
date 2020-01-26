@@ -67,9 +67,9 @@ The `authprotocol` keyword specifies the authenication protocol to use.  It can 
 The `authpassword` keyword specifies the authentication pass phrase to set.
 
 The `authprotocol` and `authpassword` keywords are required when the `securitylevel` is either `auth`
-or `auth+priv'.
+or `auth+priv`.
 
-The `privprotocol` protocol specifies the privacy protocol to use.  It can be either 'DES' or 'AES-128'.
+The `privprotocol` protocol specifies the privacy protocol to use.  It can be either `DES` or `AES-128`.
 
 The `privpassword` protocol specifies the privacy pass phrase to set.
 
@@ -135,10 +135,10 @@ On UNIX/Linux open a command prompt, change to the directory and type:
 ```
 
 The `setsnmpv3.py` program will read and validate the `snmpv3.conf` configurartion file.
-Next it will read lines from the `snmpv3.hosts` file and for each host naeme will
+Next it will read lines from the `snmpv3.hosts` file and for each host name will
 set the SNMP v3 passwords on that PDU.
 
-If errors occur the message and sent to standard error and the programs moves on to the next
+If errors occur then messages are sent to standard error and the programs moves on to the next
 PDU in the `snmpv3.hosts` file.
 
 ## Command line options for the `setsnmpv3.py` program
