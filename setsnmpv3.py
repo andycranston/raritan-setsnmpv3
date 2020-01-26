@@ -1,6 +1,6 @@
 #! /usr/bin/python3
 #
-# @(!--#) @(#) setsnmpv3.py, version 013, 23-january-2020
+# @(!--#) @(#) setsnmpv3.py, version 015, 26-january-2020
 #
 # set up SNMP v3 on a Raritan intelligent PDU
 #
@@ -28,22 +28,6 @@ DEFAULT_HOST_FILENAME   = 'snmpv3.hosts'
 
 ########################################################################
 
-def defaultparams():
-    params = {}
-
-    params['user']          = 'admin'
-    params['userpass']      = 'raritan'
-    params['snmpuser']      = 'admin'
-    params['securitylevel'] = 'none'
-    params['authprotocol']  = 'SHA1'
-    params['authpassword']  = ''
-    params['privprotocol']  = 'DES'
-    params['privpassword']  = ''
-
-    return params
-
-########################################################################
-
 def alllower(s):
     if s == '':
         return False
@@ -68,10 +52,70 @@ def dequote(s, q1, q2):
 
 ########################################################################
 
+def detag(html):
+    s = ''
+
+    intag = False
+
+    for c in str(html):
+        if c == '<':
+            intag = True
+        elif c == '>':
+            intag = False
+        elif not intag:
+            if c == '\n':
+                c = ' '
+            s += c
+
+    return s.strip()
+
+########################################################################
+
+def error2text(error):
+    if error == 1:
+        text = 'Password Unchanged'
+    elif error == 2:
+        text = 'Password Empty'
+    elif error == 3:
+        text = 'Password Too Short'
+    elif error == 4:
+        text = 'Password Too Long'
+    elif error == 5:
+        text = 'Password Ctrl Chars'
+    elif error == 6:
+        text = 'Password Need Lower'
+    elif error == 7:
+        text = 'Password Need Upper'
+    elif error == 8:
+        text = 'Password Need Numeric'
+    elif error == 9:
+        text = 'Password Need Special'
+    elif error == 10:
+        text = 'Password In History'
+    elif error == 11:
+        text = 'Password Too Short For SNMP'
+    elif error == 12:
+        text = 'Invalid Argument'
+    elif error == 13:
+        text = 'Wrong Password'
+    elif error == 14:
+        text = 'Ssh Pubkey Data Too Large'
+    elif error == 15:
+        text = 'Ssh Pubkey Invalid'
+    elif error == 16:
+        text = 'Ssh Pubkey Not Supported'
+    elif error == 17:
+        text = 'Ssh RSA Pubkey Too Short'
+    else:
+        text = 'Unknown error code (rc={})'.format(error)
+
+    return text
+
+########################################################################
+
 def readconfigfile(configfile, configfilename):
     global progname
 
-    ### params = defaultparams()
     params = {}
 
     linenum = 0
@@ -205,8 +249,9 @@ def setsnmpservice(host, params):
 
     try:
         snmpconf = snmpproxy.getConfiguration()
-    except raritan.rpc.HttpException:
+    except (raritan.rpc.HttpException, raritan.rpc.JsonRpcErrorException) as errmsg:
         print('{}: problem getting SNMP service details'.format(progname), file=sys.stderr)
+        print('{}: {}'.format(progname, detag(errmsg)), file=sys.stderr)
         return False
 
     updaterequired = False
@@ -220,7 +265,12 @@ def setsnmpservice(host, params):
         updaterequired = True
 
     if updaterequired:
-        snmpproxy.setConfiguration(snmpconf)
+        try:
+            snmpproxy.setConfiguration(snmpconf)
+        except (raritan.rpc.HttpException, raritan.rpc.JsonRpcErrorException) as errmsg:
+            print('{}: problem setting SNMP service details'.format(progname), file=sys.stderr)
+            print('{}: {}'.format(progname, detag(errmsg)), file=sys.stderr)
+            return False
 
     return True
     
@@ -229,13 +279,16 @@ def setsnmpservice(host, params):
 def setsnmpuser(host, params):
     functiondebug = False
 
-    ### print('Configuring SNMPv3 user "{}" on host "{}"'.format(params['snmpuser'], host))
-
     agent = raritan.rpc.Agent("https", host, params['user'], params['userpass'], timeout=30, disable_certificate_verification=True)
 
     snmpuserproxy = raritan.rpc.usermgmt.User('/auth/user/{}'.format(params['snmpuser']), agent)
 
-    snmpuserinfo = snmpuserproxy.getInfo()
+    try:
+        snmpuserinfo = snmpuserproxy.getInfo()
+    except (raritan.rpc.HttpException, raritan.rpc.JsonRpcErrorException) as errmsg:
+        print('{}: problem getting SNMP user details'.format(progname), file=sys.stderr)
+        print('{}: {}'.format(progname, detag(errmsg)), file=sys.stderr)
+        return False
 
     if functiondebug:
         print('Current SNMP v3 settings are:')
@@ -313,13 +366,17 @@ def setsnmpuser(host, params):
         print('Proposed new SNMP v3 settings are:')
         print(snmpuserinfo.snmpV3Settings)
 
-    print('Updating ... ', end='', flush=True)
-    rc = snmpuserproxy.updateAccountFull('', snmpuserinfo)
-    if rc == 0:
-        print('done')
-    else:
-        print('')
-        print('An error occurred - updateAccountFull method return code = {}'.format(rc))
+    try:
+        rc = snmpuserproxy.updateAccountFull('', snmpuserinfo)
+    except (raritan.rpc.HttpException, raritan.rpc.JsonRpcErrorException) as errmsg:
+        print('{}: problem setting SNMP user details'.format(progname), file=sys.stderr)
+        print('{}: {}'.format(progname, detag(errmsg)), file=sys.stderr)
+        return False
+
+    if rc != 0:
+        print('{}: non-zero return code when setting SNMP user details (rc={})'.format(progname, rc), file=sys.stderr)
+        print('{}: {}'.format(progname, error2text(rc)), file=sys.stderr)
+        return False
 
     if functiondebug:
         snmpuserinfo = snmpuserproxy.getInfo()
@@ -357,9 +414,13 @@ def readhostfile(hostfile, hostfilename, params):
 
         print('Configuring SNMP v3 on host "{}"'.format(host))
 
-        if setsnmpservice(host, params) == True:
-            setsnmpuser(host, params)
-            print('Done')
+        if setsnmpservice(host, params) == False:
+            errorcount += 1
+        else:
+            if setsnmpuser(host, params) == False:
+                errorcount += 1
+            else:
+                print('Done')
 
     return errorcount
 
