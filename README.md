@@ -111,7 +111,7 @@ it so only authorised users can access it.
 ## The `snmpv3.hosts` configuration file
 
 The `snmpv3.hosts` file contains host names, one per line, of each PDU the
-`setsnmpv3.py` program is to set the SNMP v3 password on.  Lines which
+`setsnmpv3.py` program is to set the SNMP v3 passwords on.  Lines which
 begin with a '#' character and blank lines are treated as comments and
 are ignored.
 
@@ -152,7 +152,7 @@ The `setsnmpv3.py` program will read and validate the `snmpv3.conf`
 configurartion file.  Next it will read lines from the `snmpv3.hosts`
 file and for each host name will set the SNMP v3 passwords on that PDU.
 
-If errors occur then messages are sent to standard error and the programs
+If errors occur then messages are sent to standard error and the program
 moves on to the next PDU in the `snmpv3.hosts` file.
 
 ## Command line options for the `setsnmpv3.py` program
