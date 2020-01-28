@@ -9,6 +9,15 @@ Handy for making bulk password changes to large numbers of PDUs during
 a deployment or makng regular password changes to comply with local
 security standards.
 
+## YouTube video
+
+As well as reading this documentation you could also watch
+this YouTube video:
+
+[Using the setsnmpv3 program to set SNMP v3 credentials on Raritan intelligent PDU devices](https://www.youtube.com/watch?v=tIXui9R35Lw)
+
+It is just under 10 minutes long - choose well :-]
+
 ## Quick start
 
 Edit the `snmpv3.conf` file and specify the necessary user credentials.
@@ -191,6 +200,11 @@ on Windows and on UNIX/Linux run as:
 
 You can specify both the `--config` and `--host` command line options
 if required.
+
+## To do list
+
+Provide a way to make the passwords and pass phrases in the `snmpv3.conf`
+file less "visible".
 
 ------------------------------------
 End of file
