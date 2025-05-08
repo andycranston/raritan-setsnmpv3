@@ -1,6 +1,6 @@
 #! /usr/bin/python3
 #
-# @(!--#) @(#) setsnmpv3.py, version 015, 26-january-2020
+# @(!--#) @(#) setsnmpv3.py, sversion 0.1.0, fversion 017, 08-may-2025
 #
 # set up SNMP v3 on a Raritan intelligent PDU
 #
@@ -15,7 +15,7 @@ import argparse
 
 import raritan.rpc.devsettings
 import raritan.rpc.usermgmt
-import raritan.rpc.um
+### import raritan.rpc.um
 
 ########################################################################
 
@@ -298,23 +298,23 @@ def setsnmpuser(host, params):
 
     if sl == 'disable':
         snmpuserinfo.snmpV3Settings.enabled                           = False
-        snmpuserinfo.snmpV3Settings.secLevel                          = raritan.rpc.um.SnmpV3.SecurityLevel.NO_AUTH_NO_PRIV
-        snmpuserinfo.snmpV3Settings.authProtocol                      = raritan.rpc.um.SnmpV3.AuthProtocol.SHA1
+        snmpuserinfo.snmpV3Settings.secLevel                          = raritan.rpc.usermgmt.SnmpV3SecLevel.NO_AUTH_NO_PRIV
+        snmpuserinfo.snmpV3Settings.authProtocol                      = raritan.rpc.usermgmt.SnmpV3AuthProto.SHA1
         snmpuserinfo.snmpV3Settings.usePasswordAsAuthPassphrase       = True
         snmpuserinfo.snmpV3Settings.haveAuthPassphrase                = False
         snmpuserinfo.snmpV3Settings.authPassphrase                    = ''
-        snmpuserinfo.snmpV3Settings.privProtocol                      = raritan.rpc.um.SnmpV3.PrivProtocol.DES
+        snmpuserinfo.snmpV3Settings.privProtocol                      = raritan.rpc.usermgmt.SnmpV3PrivProto.DES
         snmpuserinfo.snmpV3Settings.useAuthPassphraseAsPrivPassphrase = True
         snmpuserinfo.snmpV3Settings.havePrivPassphrase                = False
         snmpuserinfo.snmpV3Settings.privPassphrase                    = ''
     elif sl == 'none':
         snmpuserinfo.snmpV3Settings.enabled                           = True
-        snmpuserinfo.snmpV3Settings.secLevel                          = raritan.rpc.um.SnmpV3.SecurityLevel.NO_AUTH_NO_PRIV
-        snmpuserinfo.snmpV3Settings.authProtocol                      = raritan.rpc.um.SnmpV3.AuthProtocol.SHA1
+        snmpuserinfo.snmpV3Settings.secLevel                          = raritan.rpc.usermgmt.SnmpV3SecLevel.NO_AUTH_NO_PRIV
+        snmpuserinfo.snmpV3Settings.authProtocol                      = raritan.rpc.usermgmt.SnmpV3AuthProto.SHA1
         snmpuserinfo.snmpV3Settings.usePasswordAsAuthPassphrase       = True
         snmpuserinfo.snmpV3Settings.haveAuthPassphrase                = False
         snmpuserinfo.snmpV3Settings.authPassphrase                    = ''
-        snmpuserinfo.snmpV3Settings.privProtocol                      = raritan.rpc.um.SnmpV3.PrivProtocol.DES
+        snmpuserinfo.snmpV3Settings.privProtocol                      = raritan.rpc.usermgmt.SnmpV3PrivProto.DES
         snmpuserinfo.snmpV3Settings.useAuthPassphraseAsPrivPassphrase = True
         snmpuserinfo.snmpV3Settings.havePrivPassphrase                = False
         snmpuserinfo.snmpV3Settings.privPassphrase                    = ''
@@ -322,17 +322,17 @@ def setsnmpuser(host, params):
         ap = params['authprotocol']
 
         if ap.lower() == 'sha-1':
-            authproto = raritan.rpc.um.SnmpV3.AuthProtocol.SHA1
+            authproto = raritan.rpc.usermgmt.SnmpV3AuthProto.SHA1
         elif ap.lower() == 'md5':
-            authproto = raritan.rpc.um.SnmpV3.AuthProtocol.MD5
+            authproto = raritan.rpc.usermgmt.SnmpV3AuthProto.MD5
 
         snmpuserinfo.snmpV3Settings.enabled                           = True
-        snmpuserinfo.snmpV3Settings.secLevel                          = raritan.rpc.um.SnmpV3.SecurityLevel.AUTH_NO_PRIV
+        snmpuserinfo.snmpV3Settings.secLevel                          = raritan.rpc.usermgmt.SnmpV3SecLevel.AUTH_NO_PRIV
         snmpuserinfo.snmpV3Settings.authProtocol                      = authproto
         snmpuserinfo.snmpV3Settings.usePasswordAsAuthPassphrase       = False
         snmpuserinfo.snmpV3Settings.haveAuthPassphrase                = True
         snmpuserinfo.snmpV3Settings.authPassphrase                    = params['authpassword'] 
-        snmpuserinfo.snmpV3Settings.privProtocol                      = raritan.rpc.um.SnmpV3.PrivProtocol.DES
+        snmpuserinfo.snmpV3Settings.privProtocol                      = raritan.rpc.usermgmt.SnmpV3PrivProto.DES
         snmpuserinfo.snmpV3Settings.useAuthPassphraseAsPrivPassphrase = True
         snmpuserinfo.snmpV3Settings.havePrivPassphrase                = False
         snmpuserinfo.snmpV3Settings.privPassphrase                    = ''
@@ -340,19 +340,19 @@ def setsnmpuser(host, params):
         ap = params['authprotocol']
 
         if ap.lower() == 'sha-1':
-            authproto = raritan.rpc.um.SnmpV3.AuthProtocol.SHA1
+            authproto = raritan.rpc.usermgmt.SnmpV3AuthProto.SHA1
         elif ap.lower() == 'md5':
-            authproto = raritan.rpc.um.SnmpV3.AuthProtocol.MD5
+            authproto = raritan.rpc.usermgmt.SnmpV3AuthProto.MD5
 
         pp = params['privprotocol']
 
         if pp.lower() == 'des':
-            privproto = raritan.rpc.um.SnmpV3.PrivProtocol.DES
+            privproto = raritan.rpc.usermgmt.SnmpV3PrivProto.DES
         elif pp.lower() == 'aes-128':
-            privproto = raritan.rpc.um.SnmpV3.PrivProtocol.AES128
+            privproto = raritan.rpc.usermgmt.SnmpV3PrivProto.AES128
        
         snmpuserinfo.snmpV3Settings.enabled                           = True
-        snmpuserinfo.snmpV3Settings.secLevel                          = raritan.rpc.um.SnmpV3.SecurityLevel.AUTH_PRIV
+        snmpuserinfo.snmpV3Settings.secLevel                          = raritan.rpc.usermgmt.SnmpV3SecLevel.AUTH_PRIV
         snmpuserinfo.snmpV3Settings.authProtocol                      = authproto
         snmpuserinfo.snmpV3Settings.usePasswordAsAuthPassphrase       = False
         snmpuserinfo.snmpV3Settings.haveAuthPassphrase                = True
